@@ -1,0 +1,102 @@
+#!/usr/bin/env python
+
+# Any copyright is dedicated to the public domain.
+# http://creativecommons.org/publicdomain/zero/1.0/
+
+"""Re-order the files in a patch according to a set of rules (specified in
+compare_diff_pieces).
+
+Input is accepted on stdin, and written to stdout.
+
+Usage: cat patch | reorder-patch > reordered-patch
+
+"""
+
+import sys
+import os
+import re
+
+def splitdiff(f):
+    """Split a file containing a diff into pieces, one per file.
+
+    We always return a patch header as the first piece; if the given patch does
+    not have a header, we return the empty string.
+
+    """
+    lines = ''
+    for line in f:
+        if line.startswith('diff'):
+            yield lines
+            lines = ''
+        lines += line
+
+    yield lines
+
+def get_filename(piece):
+    """Get the filename from a diff piece."""
+    try:
+        # The filename is the last space-separated token in the first line of
+        # the piece.  This is a wildly inefficient implementation.
+        return piece.split('\n')[0].split(' ')[-1]
+    except:
+        return ''
+
+def compare_diff_pieces(piece_a, piece_b):
+    """Determine whether piece_a should go above or below piece_b, according to
+    the following rules:
+    
+    * webidl files come first, then idl files, then ipdl files, then other
+      files.
+    * .h files come before their corresponding .cpp files.
+    * Files with "/test/" or "/tests/" in their path come after other files.
+    * Makefiles come last in their directory.
+    * Otherwise sort in lexicographic order.
+
+    """
+    a = get_filename(piece_a)
+    b = get_filename(piece_b)
+
+    def bool_comparator(fn):
+        """Transform a boolean function into a comparison function over a and
+        b, such that a < b if fn(a) and not fn(b)."""
+        val_a = fn(a)
+        val_b = fn(b)
+        if val_a and not val_b:
+            return -1
+        elif val_b and not val_a:
+            return 1
+        return 0
+
+    def comparators():
+        # Think of these bool_comparators as: You get sorted towards the top of
+        # the patch if you match the lambda.
+        yield bool_comparator(lambda x: x.endswith('.webidl'))
+        yield bool_comparator(lambda x: x.endswith('.idl'))
+        yield bool_comparator(lambda x: x.endswith('.ipdl'))
+        if a.rsplit('.', 1)[0] == b.rsplit('.', 1)[0]:
+            yield bool_comparator(lambda x: x.endswith('.h'))
+        yield bool_comparator(lambda x: not (('/test/' in x) or ('/tests/' in x)))
+        if a.rsplit('/', 1)[0] == b.rsplit('/', 1)[0]:
+            yield bool_comparator(lambda x: 'Makefile.in' not in x)
+        yield cmp(a, b)
+
+    for res in comparators():
+        if res != 0:
+            return res
+    return 0
+
+def reorder(infile, outfile):
+    pieces = splitdiff(infile)
+
+    # outfile gets the first piece first (it's the patch header), then we sort
+    # the remaining pieces.
+    outfile.write(''.join(next(pieces)))
+
+    diff_pieces = list(pieces)
+    diff_pieces.sort(compare_diff_pieces)
+    outfile.write(''.join(diff_pieces))
+
+if __name__ == '__main__':
+    infile = sys.stdin
+    outfile = sys.stdout
+    reorder(infile, outfile)
