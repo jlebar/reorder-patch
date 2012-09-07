@@ -88,7 +88,8 @@ def compare_diff_pieces(piece_a, piece_b):
     return 0
 
 def diffstat(diff_pieces):
-    proc = subprocess.Popen('diffstat', stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    # diffstat -u says don't reorder the filenames in the patch.
+    proc = subprocess.Popen(['diffstat', '-u'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     (stdout, _) = proc.communicate(''.join(diff_pieces))
     return stdout
 
