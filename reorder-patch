@@ -8,13 +8,15 @@ compare_diff_pieces).
 
 Input is accepted on stdin, and written to stdout.
 
-Usage: cat patch | reorder-patch > reordered-patch
+Usage: cat patch | reorder-patch [--stat] > reordered-patch
 
 """
 
 import sys
 import os
 import re
+import subprocess
+from optparse import OptionParser
 
 def splitdiff(f):
     """Split a file containing a diff into pieces, one per file.
@@ -85,7 +87,12 @@ def compare_diff_pieces(piece_a, piece_b):
             return res
     return 0
 
-def reorder(infile, outfile):
+def diffstat(diff_pieces):
+    proc = subprocess.Popen('diffstat', stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    (stdout, _) = proc.communicate(''.join(diff_pieces))
+    return stdout
+
+def reorder(infile, outfile, options):
     pieces = splitdiff(infile)
 
     # outfile gets the first piece first (it's the patch header), then we sort
@@ -94,9 +101,24 @@ def reorder(infile, outfile):
 
     diff_pieces = list(pieces)
     diff_pieces.sort(compare_diff_pieces)
+
+    if options.diffstat:
+        outfile.write(diffstat(diff_pieces))
+        outfile.write('\n')
+
     outfile.write(''.join(diff_pieces))
 
 if __name__ == '__main__':
     infile = sys.stdin
     outfile = sys.stdout
-    reorder(infile, outfile)
+
+    parser = OptionParser()
+    parser.add_option('--stat', dest='diffstat',
+                      action='store_true',
+                      help='add a diffstat to the patch')
+    (options, args) = parser.parse_args()
+    if args:
+        parser.usage()
+        sys.exit(1)
+
+    reorder(infile, outfile, options)
