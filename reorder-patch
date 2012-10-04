@@ -98,7 +98,7 @@ def reorder(infile, outfile, options):
 
     # outfile gets the first piece first (it's the patch header), then we sort
     # the remaining pieces.
-    outfile.write(''.join(next(pieces)))
+    outfile.write(next(pieces))
 
     diff_pieces = list(pieces)
     diff_pieces.sort(compare_diff_pieces)
