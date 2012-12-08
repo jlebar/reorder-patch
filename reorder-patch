@@ -8,7 +8,7 @@ compare_diff_pieces).
 
 Input is accepted on stdin, and written to stdout.
 
-Usage: cat patch | reorder-patch [--stat] > reordered-patch
+Usage: cat patch | reorder-patch [--stat] [--add-whitespace] > reordered-patch
 
 """
 
@@ -16,6 +16,7 @@ import sys
 import os
 import re
 import subprocess
+import itertools
 from optparse import OptionParser
 
 def splitdiff(f):
@@ -107,7 +108,10 @@ def reorder(infile, outfile, options):
         outfile.write(diffstat(diff_pieces))
         outfile.write('\n')
 
-    outfile.write(''.join(diff_pieces))
+    for line in itertools.chain(*[piece.split('\n') for piece in diff_pieces]):
+        if options.add_whitespace and (line.startswith('diff') or line.startswith('@')):
+            print('')
+        print(line)
 
 if __name__ == '__main__':
     infile = sys.stdin
@@ -117,6 +121,9 @@ if __name__ == '__main__':
     parser.add_option('--stat', dest='diffstat',
                       action='store_true',
                       help='add a diffstat to the patch')
+    parser.add_option('--add-whitespace', '-w',
+                      action='store_true',
+                      help='add a newline between diff hunks')
     (options, args) = parser.parse_args()
     if args:
         parser.usage()
